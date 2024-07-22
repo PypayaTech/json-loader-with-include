@@ -83,12 +83,20 @@ def test_process_data_include_external_file_list_data_based_on_keys(loader, tmpd
     assert loader._process_data(input_data, p) == expected
 
 
-def test_process_data_include_nested_external_file(loader, tmpdir):
-    # Create an external file structure with nested data
+def test_process_data_include_nested_external_file_string_path(loader, tmpdir):
     p = tmpdir.mkdir("sub").join("nested.json")
     p.write(json.dumps({"level1": {"level2": {"included_key": "included_value"}}}))
 
-    # Define input data with keys_path to navigate nested structure
+    data = {"foo": "bar", "include": {"filename": str(p), "keys_path": "level1/level2/included_key"}}
+    expected = {"foo": "bar", "included_key": "included_value"}
+
+    assert loader._process_data(data, p) == expected
+
+
+def test_process_data_include_nested_external_file_list_path(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("nested.json")
+    p.write(json.dumps({"level1": {"level2": {"included_key": "included_value"}}}))
+
     data = {"foo": "bar", "include": {"filename": str(p), "keys_path": ["level1", "level2", "included_key"]}}
     expected = {"foo": "bar", "included_key": "included_value"}
 
@@ -136,11 +144,90 @@ def test_process_data_replace_value_with_keys_path(loader, tmpdir):
         "foo": {
             "replace_value": {
                 "filename": str(p),
-                "keys_path": ["level1", "level2", "data_key"]
+                "keys_path": "level1/level2/data_key"
             }
         }
     }
     expected = {"foo": "data_value"}
+
+    assert loader._process_data(data, p) == expected
+
+
+def test_process_data_include_nested_keys_string_path(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("nested_keys.json")
+    p.write(json.dumps({
+        "level1": {
+            "level2": {
+                "key1": "value1",
+                "key2": "value2"
+            }
+        }
+    }))
+
+    data = {
+        "include": {
+            "filename": str(p),
+            "keys": ["level1/level2/key1", "level1/level2/key2"]
+        }
+    }
+    expected = {
+        "key1": "value1",
+        "key2": "value2"
+    }
+
+    assert loader._process_data(data, p) == expected
+
+
+def test_process_data_include_nested_keys_list_path(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("nested_keys.json")
+    p.write(json.dumps({
+        "level1": {
+            "level2": {
+                "key1": "value1",
+                "key2": "value2"
+            }
+        }
+    }))
+
+    data = {
+        "include": {
+            "filename": str(p),
+            "keys": [["level1", "level2", "key1"], ["level1", "level2", "key2"]]
+        }
+    }
+    expected = {
+        "key1": "value1",
+        "key2": "value2"
+    }
+
+    assert loader._process_data(data, p) == expected
+
+
+def test_process_data_include_nested_keys_mixed_format(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("nested_keys.json")
+    p.write(json.dumps({
+        "level1": {
+            "level2": {
+                "key1": "value1",
+                "key2": "value2"
+            }
+        },
+        "level3": {
+            "key3": "value3"
+        }
+    }))
+
+    data = {
+        "include": {
+            "filename": str(p),
+            "keys": ["level1/level2/key1", ["level1", "level2", "key2"], "level3/key3"]
+        }
+    }
+    expected = {
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    }
 
     assert loader._process_data(data, p) == expected
 

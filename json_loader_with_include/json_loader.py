@@ -47,15 +47,37 @@ class JSONLoaderWithInclude:
 
         # Navigate to nested keys if keys_path is present
         if "keys_path" in spec:
-            for key in spec["keys_path"]:
+            keys = spec["keys_path"]
+            if isinstance(keys, str):
+                keys = keys.split('/')
+            for key in keys:
                 data = data[key]
 
         if "keys" in spec:
             if isinstance(data, list):
                 data = [data[i] for i in spec["keys"]]
             elif isinstance(data, dict):
-                data = {k: data[k] for k in spec["keys"]}
+                data = {self._get_last_key(k): self._navigate_nested_key(data, k) for k in spec["keys"]}
 
+        return data
+
+    def _get_last_key(self, key):
+        if isinstance(key, str):
+            return key.split('/')[-1]
+        elif isinstance(key, list):
+            return key[-1]
+        return key
+
+    def _navigate_nested_key(self, data, key):
+        if isinstance(key, str):
+            keys = key.split('/')
+        elif isinstance(key, list):
+            keys = key
+        else:
+            return data[key]  # If it's neither string nor list, treat it as a direct key
+
+        for k in keys:
+            data = data[k]
         return data
 
     def _is_enabled(self, data):
@@ -95,7 +117,11 @@ class JSONLoaderWithInclude:
                         data.update(included_data)
                     else:
                         # Insert included data into the main dictionary key positions
-                        key_path = data["include"].get("keys_path", [])
+                        key_path = data["include"].get("keys_path", "")
+                        if isinstance(key_path, str):
+                            key_path = key_path.split('/')
+                        elif not isinstance(key_path, list):
+                            key_path = []
                         if key_path:
                             last_key = key_path[-1]
                             data[last_key] = included_data
@@ -115,9 +141,9 @@ class JSONLoaderWithInclude:
                 replace_spec = data["replace_value"]
                 replaced_data = self._load_from_file(replace_spec, base_dir)
                 if "keys" in replace_spec:
-                    return {k: replaced_data[k] for k in replace_spec["keys"]}
+                    return {k: self._navigate_nested_key(replaced_data, k) for k in replace_spec["keys"]}
                 if "key" in replace_spec:
-                    return replaced_data[replace_spec["key"]]
+                    return self._navigate_nested_key(replaced_data, replace_spec["key"])
                 return replaced_data
 
             for k, v in data.items():
