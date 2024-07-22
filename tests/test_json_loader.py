@@ -5,7 +5,17 @@ from json_loader_with_include.json_loader import JSONLoaderWithInclude
 
 @pytest.fixture
 def loader():
-    return JSONLoaderWithInclude
+    return JSONLoaderWithInclude()
+
+
+@pytest.fixture
+def loader_with_comments():
+    return JSONLoaderWithInclude(comment_char="#")
+
+
+@pytest.fixture
+def loader_custom_enable_key():
+    return JSONLoaderWithInclude(enable_key="active")
 
 
 @pytest.mark.parametrize("input_data, expected", [
@@ -133,3 +143,92 @@ def test_process_data_replace_value_with_keys_path(loader, tmpdir):
     expected = {"foo": "data_value"}
 
     assert loader._process_data(data, p) == expected
+
+
+def test_process_data_with_disabled_item(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("hello.json")
+    p.write('{"included_key": "included_value"}')
+    data = {
+        "foo": "bar",
+        "include": {
+            "enabled": False,
+            "filename": str(p)
+        },
+        "baz": "qux"
+    }
+    expected = {"foo": "bar", "baz": "qux"}
+    assert loader._process_data(data, str(tmpdir)) == expected
+
+
+def test_process_data_with_nested_disabled_item(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("hello.json")
+    p.write('{"included_key": "included_value"}')
+    data = {
+        "foo": "bar",
+        "nested": {
+            "include": {
+                "enabled": False,
+                "filename": str(p)
+            }
+        },
+        "baz": "qux"
+    }
+    expected = {"foo": "bar", "nested": {}, "baz": "qux"}
+    assert loader._process_data(data, str(tmpdir)) == expected
+
+
+def test_process_data_with_custom_enable_key(loader_custom_enable_key, tmpdir):
+    p = tmpdir.mkdir("sub").join("hello.json")
+    p.write('{"included_key": "included_value"}')
+    data = {
+        "foo": "bar",
+        "include": {
+            "active": True,
+            "filename": str(p)
+        },
+        "baz": "qux"
+    }
+    expected = {"foo": "bar", "included_key": "included_value", "baz": "qux"}
+    assert loader_custom_enable_key._process_data(data, str(tmpdir)) == expected
+
+
+def test_process_data_with_comments(loader_with_comments, tmpdir):
+    p = tmpdir.mkdir("sub").join("hello.json")
+    p.write('''
+    {
+        "key1": "value1",
+        # This is a comment
+        # "key2": "value2",
+        "key3": "value3"
+    }
+    ''')
+    data = {"include": {"filename": str(p)}}
+    expected = {"key1": "value1", "key3": "value3"}
+    assert loader_with_comments._process_data(data, str(tmpdir)) == expected
+
+
+def test_process_data_with_disabled_list_item(loader, tmpdir):
+    p1 = tmpdir.mkdir("sub1").join("file1.json")
+    p1.write('{"key1": "value1"}')
+    p2 = tmpdir.mkdir("sub2").join("file2.json")
+    p2.write('{"key2": "value2"}')
+    data = {
+        "include": [
+            {"filename": str(p1)},
+            {"enabled": False, "filename": str(p2)}
+        ]
+    }
+    expected = {"key1": "value1"}
+    assert loader._process_data(data, str(tmpdir)) == expected
+
+
+def test_process_data_with_all_disabled_items(loader, tmpdir):
+    p = tmpdir.mkdir("sub").join("hello.json")
+    p.write('{"included_key": "included_value"}')
+    data = {
+        "foo": {"enabled": False, "value": "bar"},
+        "include": {"enabled": False, "filename": str(p)},
+        "baz": {"enabled": False, "value": "qux"}
+    }
+    expected = {}
+    assert loader._process_data(data, str(tmpdir)) == expected
