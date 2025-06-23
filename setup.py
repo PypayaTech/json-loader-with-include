@@ -2,10 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name="json-loader-with-include",
-    version="0.3.1",
+    version="0.3.3",
     url="https://github.com/PypayaTech/json-loader-with-include",
     author="PypayaTech",
-    description="A simple package that allows you to include (fragments of) external JSON files within a JSON file.",
+    description="⚠️ DEPRECATED: Use 'pypaya-json' instead. Enhanced JSON processing with includes.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     readme="README.md",
