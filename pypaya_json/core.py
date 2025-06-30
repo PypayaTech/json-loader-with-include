@@ -3,18 +3,24 @@ import os
 from typing import Optional, Any, Dict, List, Union
 
 
-class JSONLoaderWithInclude:
-    """A class to load data from JSON files with the ability to include data from one JSON file
-        in another JSON file using special keys."""
+class PypayaJSON:
+    """Enhanced JSON processing with includes, comments, and more."""
 
     def __init__(self, enable_key: str = "enabled", comment_char: Optional[str] = None):
+        """
+        Initialize JSONPlus with default settings.
+
+        Args:
+            enable_key (str): The key used to enable or disable inclusions. Defaults to "enabled".
+            comment_char (Optional[str]): The character used to denote comments in JSON files. Defaults to None.
+        """
         self.enable_key = enable_key
         self.comment_char = comment_char
 
     @classmethod
-    def read_json(cls, path: str, enable_key: str = "enabled", comment_char: Optional[str] = None) -> Dict[str, Any]:
+    def load(cls, path: str, enable_key: str = "enabled", comment_char: Optional[str] = None) -> Dict[str, Any]:
         """
-        Read a JSON file and process includes.
+        Load a JSON file with includes (one-time usage).
 
         Args:
             path (str): The path to the JSON file.
@@ -25,9 +31,18 @@ class JSONLoaderWithInclude:
             Dict[str, Any]: The processed JSON data.
         """
         instance = cls(enable_key, comment_char)
-        return instance._read_json(path)
+        return instance.load_file(path)
 
-    def _read_json(self, path: str) -> Dict[str, Any]:
+    def load_file(self, path: str) -> Dict[str, Any]:
+        """
+        Load a JSON file using this instance's configuration.
+
+        Args:
+            path (str): The path to the JSON file.
+
+        Returns:
+            Dict[str, Any]: The processed JSON data.
+        """
         with open(path, 'r') as f:
             if self.comment_char:
                 # Remove comments before parsing
@@ -39,19 +54,14 @@ class JSONLoaderWithInclude:
         return self._process_data(json_data, base_dir)
 
     def _remove_comments(self, json_string: str) -> str:
+        """Remove comments from JSON string."""
         lines = json_string.split('\n')
         return '\n'.join(line.split(self.comment_char)[0].rstrip() for line in lines)
 
-    @classmethod
-    def load_from_file(cls, spec: Dict[str, Any], base_dir: str,
-                       enable_key: str = "enabled", comment_char: Optional[str] = None):
+    def load_from_spec(self, spec: Dict[str, Any], base_dir: str) -> Any:
         """Load data from a file specified in the 'spec' dictionary."""
-        instance = cls(enable_key, comment_char)
-        return instance._load_from_file(spec, base_dir)
-
-    def _load_from_file(self, spec: Dict[str, Any], base_dir: str) -> Any:
         full_path = os.path.join(base_dir, spec["filename"])
-        data = self._read_json(full_path)
+        data = self.load_file(full_path)
 
         # Navigate to nested keys if keys_path is present
         if "keys_path" in spec:
@@ -70,6 +80,7 @@ class JSONLoaderWithInclude:
         return data
 
     def _get_last_key(self, key: Union[str, List[str]]) -> str:
+        """Get the last key from a nested key path."""
         if isinstance(key, str):
             return key.split('/')[-1]
         elif isinstance(key, list):
@@ -77,6 +88,7 @@ class JSONLoaderWithInclude:
         return key
 
     def _navigate_nested_key(self, data: Dict[str, Any], key: Union[str, List[str]]) -> Any:
+        """Navigate to a nested key in the data structure."""
         if isinstance(key, str):
             keys = key.split('/')
         elif isinstance(key, list):
@@ -89,9 +101,11 @@ class JSONLoaderWithInclude:
         return data
 
     def _is_enabled(self, data: Any) -> bool:
+        """Check if a data element is enabled according to the enable_key."""
         return not isinstance(data, dict) or self.enable_key not in data or data[self.enable_key]
 
     def _handle_enabled_flag(self, data: Any) -> Any:
+        """Filter data based on enabled flags."""
         if isinstance(data, dict):
             return {k: self._handle_enabled_flag(v) for k, v in data.items() if self._is_enabled(v)}
         elif isinstance(data, list):
@@ -99,6 +113,7 @@ class JSONLoaderWithInclude:
         return data
 
     def _process_data(self, data: Any, base_dir: str) -> Any:
+        """Process data, handling includes, replacements, and nested structures."""
         # Handle enabled flag before processing
         data = self._handle_enabled_flag(data)
 
@@ -106,7 +121,7 @@ class JSONLoaderWithInclude:
             new_data = []
             for i, v in enumerate(data):
                 if isinstance(v, dict) and "include" in v:
-                    included_data = self._load_from_file(v["include"], base_dir)
+                    included_data = self.load_from_spec(v["include"], base_dir)
                     if isinstance(included_data, list):
                         new_data.extend(included_data)
                     else:
@@ -120,7 +135,7 @@ class JSONLoaderWithInclude:
         elif isinstance(data, dict):
             if "include" in data:
                 if isinstance(data["include"], dict):
-                    included_data = self._load_from_file(data["include"], base_dir)
+                    included_data = self.load_from_spec(data["include"], base_dir)
                     if isinstance(included_data, dict):
                         data.update(included_data)
                     else:
@@ -138,7 +153,7 @@ class JSONLoaderWithInclude:
 
                 elif isinstance(data["include"], list):
                     for inc in data["include"]:
-                        included_data = self._load_from_file(inc, base_dir)
+                        included_data = self.load_from_spec(inc, base_dir)
                         if isinstance(included_data, dict):
                             data.update(included_data)
                         else:
@@ -147,7 +162,7 @@ class JSONLoaderWithInclude:
 
             if "replace_value" in data:
                 replace_spec = data["replace_value"]
-                replaced_data = self._load_from_file(replace_spec, base_dir)
+                replaced_data = self.load_from_spec(replace_spec, base_dir)
                 if "keys" in replace_spec:
                     return {k: self._navigate_nested_key(replaced_data, k) for k in replace_spec["keys"]}
                 if "key" in replace_spec:

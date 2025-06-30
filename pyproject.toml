@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "pypaya-json"
+version = "0.1.0"
+description = "Enhanced JSON processing with includes, comments, and more"
+authors = ["PypayaTech"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/PypayaTech/pypaya-json"
+keywords = ["json", "include", "config", "loader", "comments", "enhanced"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: General",
+    "Topic :: Utilities",
+]
+packages = [
+    { include = "pypaya_json" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,21 +1,21 @@
 import json
 import pytest
-from json_loader_with_include.json_loader import JSONLoaderWithInclude
+from pypaya_json.core import PypayaJSON
 
 
 @pytest.fixture
 def loader():
-    return JSONLoaderWithInclude()
+    return PypayaJSON()
 
 
 @pytest.fixture
 def loader_with_comments():
-    return JSONLoaderWithInclude(comment_char="#")
+    return PypayaJSON(comment_char="#")
 
 
 @pytest.fixture
 def loader_custom_enable_key():
-    return JSONLoaderWithInclude(enable_key="active")
+    return PypayaJSON(enable_key="active")
 
 
 @pytest.mark.parametrize("input_data, expected", [
