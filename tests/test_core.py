@@ -10,7 +10,7 @@ def loader():
 
 @pytest.fixture
 def loader_with_comments():
-    return PypayaJSON(comment_char="#")
+    return PypayaJSON(comment_string="#")
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pypaya-json"
-version = "0.1.0"
+version = "0.2.1"
 description = "Enhanced JSON processing with includes, comments, and more"
 authors = ["PypayaTech"]
 readme = "README.md"

@@ -6,31 +6,31 @@ from typing import Optional, Any, Dict, List, Union
 class PypayaJSON:
     """Enhanced JSON processing with includes, comments, and more."""
 
-    def __init__(self, enable_key: str = "enabled", comment_char: Optional[str] = None):
+    def __init__(self, enable_key: str = "enabled", comment_string: Optional[str] = None):
         """
-        Initialize JSONPlus with default settings.
+        Initialize PypayaJSON with default settings.
 
         Args:
             enable_key (str): The key used to enable or disable inclusions. Defaults to "enabled".
-            comment_char (Optional[str]): The character used to denote comments in JSON files. Defaults to None.
+            comment_string (Optional[str]): The string used to denote comments in JSON files. Defaults to None.
         """
         self.enable_key = enable_key
-        self.comment_char = comment_char
+        self.comment_string = comment_string
 
     @classmethod
-    def load(cls, path: str, enable_key: str = "enabled", comment_char: Optional[str] = None) -> Dict[str, Any]:
+    def load(cls, path: str, enable_key: str = "enabled", comment_string: Optional[str] = None) -> Dict[str, Any]:
         """
         Load a JSON file with includes (one-time usage).
 
         Args:
             path (str): The path to the JSON file.
             enable_key (str): The key used to enable or disable inclusions. Defaults to "enabled".
-            comment_char (Optional[str]): The character used to denote comments in JSON files. Defaults to None.
+            comment_string (Optional[str]): The string used to denote comments in JSON files. Defaults to None.
 
         Returns:
             Dict[str, Any]: The processed JSON data.
         """
-        instance = cls(enable_key, comment_char)
+        instance = cls(enable_key, comment_string)
         return instance.load_file(path)
 
     def load_file(self, path: str) -> Dict[str, Any]:
@@ -44,7 +44,7 @@ class PypayaJSON:
             Dict[str, Any]: The processed JSON data.
         """
         with open(path, 'r') as f:
-            if self.comment_char:
+            if self.comment_string:
                 # Remove comments before parsing
                 data = self._remove_comments(f.read())
                 json_data = json.loads(data)
@@ -56,7 +56,7 @@ class PypayaJSON:
     def _remove_comments(self, json_string: str) -> str:
         """Remove comments from JSON string."""
         lines = json_string.split('\n')
-        return '\n'.join(line.split(self.comment_char)[0].rstrip() for line in lines)
+        return '\n'.join(line.split(self.comment_string)[0].rstrip() for line in lines)
 
     def load_from_spec(self, spec: Dict[str, Any], base_dir: str) -> Any:
         """Load data from a file specified in the 'spec' dictionary."""

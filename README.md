@@ -28,7 +28,7 @@ from pypaya_json import PypayaJSON
 data = PypayaJSON.load("config.json")
 
 # With comments support
-data = PypayaJSON.load("config.json", comment_char="#")
+data = PypayaJSON.load("config.json", comment_string="#")
 
 # With custom enable key
 data = PypayaJSON.load("config.json", enable_key="active")
@@ -40,7 +40,7 @@ data = PypayaJSON.load("config.json", enable_key="active")
 from pypaya_json import PypayaJSON
 
 # Create a reusable loader
-loader = PypayaJSON(enable_key="active", comment_char="//")
+loader = PypayaJSON(enable_key="active", comment_string="//")
 
 # Load multiple files with same settings
 config = loader.load_file("config.json")
@@ -98,7 +98,7 @@ data = PypayaJSON.load("main.json")
 ```
 
 ```python
-data = PypayaJSON.load("config.json", comment_char="//")
+data = PypayaJSON.load("config.json", comment_string="//")
 # Comments are automatically stripped
 ```
 
