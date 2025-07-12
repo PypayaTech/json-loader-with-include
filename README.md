@@ -1,11 +1,12 @@
 # pypaya-json
 
-Enhanced JSON processing with includes, comments, and more.
+Enhanced JSON processing with includes, comments, path resolution, and more.
 
 ## Features
 
 - **File Inclusions**: Include other JSON files using `"include"` declarations
 - **Comment Support**: Add comments to JSON files using custom comment characters
+- **Path Resolution**: Automatically resolve relative paths to absolute paths using `@path:` annotations
 - **Flexible Configuration**: Use as class methods for one-time operations or instances for reusable configurations
 - **Nested Key Access**: Navigate and extract data from nested JSON structures
 - **Conditional Processing**: Enable/disable sections using custom enable keys
@@ -27,11 +28,14 @@ from pypaya_json import PypayaJSON
 # Basic loading
 data = PypayaJSON.load("config.json")
 
-# With comments support
+# With comments support and path resolution
 data = PypayaJSON.load("config.json", comment_string="#")
 
-# With custom enable key
-data = PypayaJSON.load("config.json", enable_key="active")
+# With custom enable key and path annotations disabled
+data = PypayaJSON.load("config.json", enable_key="active", resolve_path_annotations=False)
+
+# With custom path annotation prefix
+data = PypayaJSON.load("config.json", path_annotation_prefix="$resolve:")
 ```
 
 ### Reusable configuration (instance)
@@ -48,6 +52,35 @@ settings = loader.load_file("settings.json")
 ```
 
 ## Examples
+
+### Path resolution
+
+**config.json**:
+```json
+{
+  "training": {
+    "@path:data_dir": "../../data/training",
+    "@path:checkpoint": "../models/best.ckpt"
+  },
+  "output": {
+    "@path:save_dir": "./outputs"
+  }
+}
+```
+
+**Result**:
+```python
+data = PypayaJSON.load("config.json")
+# {
+#   "training": {
+#     "data_dir": "/absolute/path/to/data/training",
+#     "checkpoint": "/absolute/path/to/models/best.ckpt"
+#   },
+#   "output": {
+#     "save_dir": "/absolute/path/to/project/outputs"
+#   }
+# }
+```
 
 ### Basic file inclusion
 
@@ -101,6 +134,28 @@ data = PypayaJSON.load("main.json")
 data = PypayaJSON.load("config.json", comment_string="//")
 # Comments are automatically stripped
 ```
+
+### Combined path resolution and includes
+
+**main.json**:
+```json
+{
+  "@path:base_dir": "../data",
+  "include": {
+    "filename": "models.json"
+  }
+}
+```
+
+**models.json**:
+```json
+{
+  "@path:checkpoint_dir": "./checkpoints",
+  "model_name": "best_model.ckpt"
+}
+```
+
+**Result**: All paths resolved relative to their respective config file locations
 
 ### Nested key access
 
@@ -159,24 +214,39 @@ data = loader.load_file("config.json")
 }
 ```
 
+### Custom path annotation prefix
+
+```json
+{
+  "$resolve:data_dir": "../../data",
+  "$resolve:model_path": "../models/best.ckpt"
+}
+```
+
+```python
+data = PypayaJSON.load("config.json", path_annotation_prefix="$resolve:")
+```
+
 ## API Reference
 
 ### PypayaJSON class
 
 #### Class methods
 
-- `PypayaJSON.load(path, enable_key="enabled", comment_char=None)` - Load JSON file with one-time configuration
+- `PypayaJSON.load(path, enable_key="enabled", comment_string=None, resolve_path_annotations=True, path_annotation_prefix="@path:")` - Load JSON file with one-time configuration
 
 #### Instance methods
 
-- `PypayaJSON(enable_key="enabled", comment_char=None)` - Create reusable loader instance
+- `PypayaJSON(enable_key="enabled", comment_string=None, resolve_path_annotations=True, path_annotation_prefix="@path:")` - Create reusable loader instance
 - `loader.load_file(path)` - Load JSON file using instance configuration
 
 #### Parameters
 
 - `path` (str): Path to the JSON file
 - `enable_key` (str): Key used for conditional inclusion (default: "enabled")
-- `comment_char` (str, optional): Character that denotes comments (default: None)
+- `comment_string` (str, optional): String that denotes comments (default: None)
+- `resolve_path_annotations` (bool): Whether to resolve path annotations (default: True)
+- `path_annotation_prefix` (str): Prefix for path annotation keys (default: "@path:")
 
 ## Advanced usage
 
@@ -210,6 +280,42 @@ data = loader.load_file("config.json")
   "include": {
     "filename": "nested.json",
     "keys_path": ["level1", "level2", "target_key"]
+  }
+}
+```
+
+### Complex configuration with all features
+
+```json
+{
+  // Application settings
+  "app": {
+    "@path:base_dir": "../../app",
+    "name": "MyApp"
+  },
+  
+  // Include database config
+  "include": {
+    "filename": "database.json",
+    "keys": ["production"]
+  },
+  
+  // Model configuration with paths
+  "model": {
+    "@path:checkpoint_dir": "./checkpoints",
+    "@path:data_dir": "../data",
+    "config": {
+      "replace_value": {
+        "filename": "model_params.json",
+        "key": "transformer"
+      }
+    }
+  },
+  
+  // Optional development settings
+  "dev_tools": {
+    "enabled": false,
+    "@path:debug_dir": "./debug"
   }
 }
 ```

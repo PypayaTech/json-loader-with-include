@@ -1,24 +1,44 @@
 import json
 import os
 from typing import Optional, Any, Dict, List, Union
+from pathlib import Path
 
 
 class PypayaJSON:
-    """Enhanced JSON processing with includes, comments, and more."""
+    """Enhanced JSON processing with includes, comments, and path resolution."""
 
-    def __init__(self, enable_key: str = "enabled", comment_string: Optional[str] = None):
+    def __init__(self,
+                 enable_key: str = "enabled",
+                 comment_string: Optional[str] = None,
+                 resolve_path_annotations: bool = True,
+                 path_annotation_prefix: str = "@path:"):
         """
-        Initialize PypayaJSON with default settings.
+        Initialize PypayaJSON with enhanced processing capabilities.
 
         Args:
             enable_key (str): The key used to enable or disable inclusions. Defaults to "enabled".
             comment_string (Optional[str]): The string used to denote comments in JSON files. Defaults to None.
+            resolve_path_annotations (bool): Whether to resolve path annotations to absolute paths. Defaults to True.
+            path_annotation_prefix (str): Prefix for path annotation keys. Keys starting with this prefix
+                will have their values resolved to absolute paths. Defaults to "@path:".
+                Examples: "@path:data_dir" -> {"data_dir": "/absolute/path/to/data"}
         """
         self.enable_key = enable_key
         self.comment_string = comment_string
+        self.resolve_path_annotations = resolve_path_annotations
+
+        if not isinstance(path_annotation_prefix, str):
+            raise ValueError("path_annotation_prefix must be a string")
+        if not path_annotation_prefix:
+            raise ValueError("path_annotation_prefix cannot be empty (risk of conflicts)")
+        self.path_annotation_prefix = path_annotation_prefix
 
     @classmethod
-    def load(cls, path: str, enable_key: str = "enabled", comment_string: Optional[str] = None) -> Dict[str, Any]:
+    def load(cls, path: str,
+             enable_key: str = "enabled",
+             comment_string: Optional[str] = None,
+             resolve_path_annotations: bool = True,
+             path_annotation_prefix: str = "@path:") -> Dict[str, Any]:
         """
         Load a JSON file with includes (one-time usage).
 
@@ -26,11 +46,13 @@ class PypayaJSON:
             path (str): The path to the JSON file.
             enable_key (str): The key used to enable or disable inclusions. Defaults to "enabled".
             comment_string (Optional[str]): The string used to denote comments in JSON files. Defaults to None.
+            resolve_path_annotations (bool): Whether to resolve path annotations. Defaults to True.
+            path_annotation_prefix (str): Prefix for path annotation keys. Defaults to "@path:".
 
         Returns:
             Dict[str, Any]: The processed JSON data.
         """
-        instance = cls(enable_key, comment_string)
+        instance = cls(enable_key, comment_string, resolve_path_annotations, path_annotation_prefix)
         return instance.load_file(path)
 
     def load_file(self, path: str) -> Dict[str, Any]:
@@ -112,10 +134,60 @@ class PypayaJSON:
             return [self._handle_enabled_flag(item) for item in data if self._is_enabled(item)]
         return data
 
+    def _has_path_annotations(self, obj: Any) -> bool:
+        """Quick check to determine if path annotation processing is needed."""
+        if isinstance(obj, dict):
+            return any(k.startswith(self.path_annotation_prefix) for k in obj.keys()) or \
+                any(self._has_path_annotations(v) for v in obj.values()
+                    if isinstance(v, (dict, list)))
+        elif isinstance(obj, list):
+            return any(self._has_path_annotations(item) for item in obj
+                       if isinstance(item, (dict, list)))
+        return False
+
+    def _resolve_path_annotations(self, data: Any, base_dir: str) -> Any:
+        """Resolve @path: annotations to absolute paths."""
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                if key.startswith(self.path_annotation_prefix) and isinstance(value, str):
+                    # This is a path annotation - resolve it
+                    actual_key = key[len(self.path_annotation_prefix):]
+                    resolved_path = self._resolve_single_path(value, base_dir)
+                    result[actual_key] = resolved_path
+                elif isinstance(value, (dict, list)):
+                    # Recurse into nested structures
+                    result[key] = self._resolve_path_annotations(value, base_dir)
+                else:
+                    # Regular key-value pair
+                    result[key] = value
+            return result
+        elif isinstance(data, list):
+            return [self._resolve_path_annotations(item, base_dir) for item in data]
+        else:
+            return data
+
+    def _resolve_single_path(self, path_str: str, base_dir: str) -> str:
+        """Resolve a single path string relative to base_dir."""
+        if not path_str:
+            return path_str
+
+        path = Path(path_str)
+
+        # If relative, make it relative to base_dir (same logic as includes)
+        if not path.is_absolute():
+            path = Path(base_dir) / path
+
+        return str(path.expanduser().resolve())
+
     def _process_data(self, data: Any, base_dir: str) -> Any:
-        """Process data, handling includes, replacements, and nested structures."""
+        """Process data, handling includes, replacements, path annotations, and nested structures."""
         # Handle enabled flag before processing
         data = self._handle_enabled_flag(data)
+
+        # Handle path annotations if enabled and present
+        if self.resolve_path_annotations and self._has_path_annotations(data):
+            data = self._resolve_path_annotations(data, base_dir)
 
         if isinstance(data, list):
             new_data = []

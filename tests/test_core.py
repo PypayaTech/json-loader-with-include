@@ -18,6 +18,24 @@ def loader_custom_enable_key():
     return PypayaJSON(enable_key="active")
 
 
+@pytest.fixture
+def loader_with_paths():
+    """Loader with path annotations enabled (default)."""
+    return PypayaJSON(resolve_path_annotations=True)
+
+
+@pytest.fixture
+def loader_without_paths():
+    """Loader with path annotations disabled."""
+    return PypayaJSON(resolve_path_annotations=False)
+
+
+@pytest.fixture
+def loader_custom_prefix():
+    """Loader with custom path annotation prefix."""
+    return PypayaJSON(path_annotation_prefix="$resolve:")
+
+
 @pytest.mark.parametrize("input_data, expected", [
     ({"foo": "bar", "hello": "world"}, {"foo": "bar", "hello": "world"}),
     ({"foo": "bar", "array": [1, 2, 3]}, {"foo": "bar", "array": [1, 2, 3]}),
@@ -319,3 +337,239 @@ def test_process_data_with_all_disabled_items(loader, tmpdir):
     }
     expected = {}
     assert loader._process_data(data, str(tmpdir)) == expected
+
+
+def test_path_annotation_basic(loader_with_paths, tmpdir):
+    """Test basic path annotation resolution."""
+    data = {
+        "@path:data_dir": "subdir/data",
+        "regular_field": "value"
+    }
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    expected_path = str(tmpdir.join("subdir", "data"))
+    assert result["data_dir"] == expected_path
+    assert result["regular_field"] == "value"
+    assert "@path:data_dir" not in result
+
+
+def test_path_annotation_nested(loader_with_paths, tmpdir):
+    """Test path annotations in nested structures."""
+    data = {
+        "config": {
+            "@path:checkpoint_path": "models/best.ckpt",
+            "@path:data_dir": "subdir/data"  # Use simple relative path
+        },
+        "other": "value"
+    }
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    expected_checkpoint = str(tmpdir.join("models", "best.ckpt"))
+    expected_data = str(tmpdir.join("subdir", "data"))
+
+    assert result["config"]["checkpoint_path"] == expected_checkpoint
+    assert result["config"]["data_dir"] == expected_data
+    assert result["other"] == "value"
+    assert "@path:checkpoint_path" not in result["config"]
+    assert "@path:data_dir" not in result["config"]
+
+
+def test_path_annotation_in_list(loader_with_paths, tmpdir):
+    """Test path annotations within list structures."""
+    data = [
+        {"@path:file1": "dir1/file.txt"},
+        {"regular": "value"},
+        {"@path:file2": "dir2/file.txt"}
+    ]
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    expected_file1 = str(tmpdir.join("dir1", "file.txt"))
+    expected_file2 = str(tmpdir.join("dir2", "file.txt"))
+
+    assert result[0]["file1"] == expected_file1
+    assert result[1]["regular"] == "value"
+    assert result[2]["file2"] == expected_file2
+
+
+def test_path_annotation_absolute_path(loader_with_paths, tmpdir):
+    """Test that absolute paths are preserved."""
+    import os
+    absolute_path = os.path.abspath("/some/absolute/path")
+
+    data = {"@path:abs_path": absolute_path}
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    # Should still be absolute, but resolved
+    assert os.path.isabs(result["abs_path"])
+    assert result["abs_path"] == absolute_path
+
+
+def test_path_annotation_disabled(loader_without_paths, tmpdir):
+    """Test that path annotations are ignored when disabled."""
+    data = {
+        "@path:data_dir": "subdir/data",
+        "regular_field": "value"
+    }
+
+    result = loader_without_paths._process_data(data, str(tmpdir))
+
+    # Should remain unchanged
+    assert result == data
+    assert "@path:data_dir" in result
+
+
+def test_path_annotation_custom_prefix(loader_custom_prefix, tmpdir):
+    """Test custom path annotation prefix."""
+    data = {
+        "$resolve:data_dir": "subdir/data",
+        "@path:not_resolved": "should/not/change"
+    }
+
+    result = loader_custom_prefix._process_data(data, str(tmpdir))
+
+    expected_path = str(tmpdir.join("subdir", "data"))
+    assert result["data_dir"] == expected_path
+    assert result["@path:not_resolved"] == "should/not/change"
+    assert "$resolve:data_dir" not in result
+
+
+def test_path_annotation_empty_string(loader_with_paths, tmpdir):
+    """Test handling of empty path strings."""
+    data = {"@path:empty_path": ""}
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    assert result["empty_path"] == ""
+
+
+def test_path_annotation_non_string_value(loader_with_paths, tmpdir):
+    """Test that non-string values with path prefix are ignored."""
+    data = {
+        "@path:valid_path": "subdir/data",
+        "@path:invalid_number": 123,
+        "@path:invalid_dict": {"nested": "value"}
+    }
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    expected_path = str(tmpdir.join("subdir", "data"))
+    assert result["valid_path"] == expected_path
+    # Non-string values should be preserved as-is
+    assert result["@path:invalid_number"] == 123
+    assert result["@path:invalid_dict"] == {"nested": "value"}
+
+
+def test_path_annotation_with_includes(loader_with_paths, tmpdir):
+    """Test path annotations combined with includes."""
+    # Create external file
+    external_file = tmpdir.join("external.json")
+    external_file.write(json.dumps({"@path:external_path": "external/data"}))
+
+    data = {
+        "@path:local_path": "local/data",
+        "include": {"filename": str(external_file)}
+    }
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    expected_local = str(tmpdir.join("local", "data"))
+    expected_external = str(tmpdir.join("external", "data"))
+
+    assert result["local_path"] == expected_local
+    assert result["external_path"] == expected_external
+
+
+def test_has_path_annotations_detection(loader_with_paths):
+    """Test the _has_path_annotations optimization method."""
+    # Data with path annotations
+    data_with_paths = {"@path:test": "value", "regular": "value"}
+    assert loader_with_paths._has_path_annotations(data_with_paths) is True
+
+    # Data without path annotations
+    data_without_paths = {"regular": "value", "other": "value"}
+    assert loader_with_paths._has_path_annotations(data_without_paths) is False
+
+    # Nested data with path annotations
+    nested_data = {"level1": {"@path:nested": "value"}}
+    assert loader_with_paths._has_path_annotations(nested_data) is True
+
+    # List with path annotations
+    list_data = [{"@path:item": "value"}]
+    assert loader_with_paths._has_path_annotations(list_data) is True
+
+
+def test_path_annotation_class_method(tmpdir):
+    """Test path annotations using the class method."""
+    config_file = tmpdir.join("config.json")
+    data = {
+        "@path:data_dir": "subdir/data",
+        "regular_field": "value"
+    }
+    config_file.write(json.dumps(data))
+
+    result = PypayaJSON.load(
+        str(config_file),
+        resolve_path_annotations=True
+    )
+
+    expected_path = str(tmpdir.join("subdir", "data"))
+    assert result["data_dir"] == expected_path
+    assert result["regular_field"] == "value"
+
+
+def test_path_annotation_prefix_validation():
+    """Test validation of path annotation prefix."""
+    # Valid prefix
+    loader = PypayaJSON(path_annotation_prefix="@custom:")
+    assert loader.path_annotation_prefix == "@custom:"
+
+    # Invalid prefix - empty string
+    with pytest.raises(ValueError, match="path_annotation_prefix cannot be empty"):
+        PypayaJSON(path_annotation_prefix="")
+
+    # Invalid prefix - not a string
+    with pytest.raises(ValueError, match="path_annotation_prefix must be a string"):
+        PypayaJSON(path_annotation_prefix=123)
+
+
+def test_path_annotation_complex_nested_structure(loader_with_paths, tmpdir):
+    """Test path annotations in complex nested structures."""
+    data = {
+        "training": {
+            "@path:data_dir": "data/training",
+            "model": {
+                "@path:checkpoint": "models/best.ckpt"
+            }
+        },
+        "inference": {
+            "@path:model_path": "models/inference.ckpt"
+        },
+        "callbacks": [
+            {
+                "type": "ModelCheckpoint",
+                "@path:dirpath": "outputs/checkpoints"
+            },
+            {
+                "type": "Logger",
+                "@path:save_dir": "outputs/logs"
+            }
+        ]
+    }
+
+    result = loader_with_paths._process_data(data, str(tmpdir))
+
+    # Check all paths were resolved
+    assert result["training"]["data_dir"] == str(tmpdir.join("data", "training"))
+    assert result["training"]["model"]["checkpoint"] == str(tmpdir.join("models", "best.ckpt"))
+    assert result["inference"]["model_path"] == str(tmpdir.join("models", "inference.ckpt"))
+    assert result["callbacks"][0]["dirpath"] == str(tmpdir.join("outputs", "checkpoints"))
+    assert result["callbacks"][1]["save_dir"] == str(tmpdir.join("outputs", "logs"))
+
+    # Check no annotation keys remain
+    assert "@path:data_dir" not in result["training"]
+    assert "@path:checkpoint" not in result["training"]["model"]
+    assert "@path:model_path" not in result["inference"]
+    assert "@path:dirpath" not in result["callbacks"][0]
+    assert "@path:save_dir" not in result["callbacks"][1]
